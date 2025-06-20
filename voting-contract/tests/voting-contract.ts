@@ -6,60 +6,64 @@ import { assert } from "chai";
 describe("voting-contract", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
-
   const program = anchor.workspace.votingContract as Program<VotingContract>;
   const signer = provider.wallet;
 
-  it("Initialize Poll!", async () => {
-    const pollId = new anchor.BN(1);
-    const pollStart = new anchor.BN(Math.floor(Date.now() / 1000)); // Current time in seconds
-    const pollEnd = pollStart.add(new anchor.BN(3600)); // +1 hour
-    const description = "Who should be the next DAO leader?";
+  const pollId = new anchor.BN(1);
+  const description = "Who should be the next DAO leader?";
+  const candidateName = "Alice";
 
-    // Derive the poll PDA - this should match your Rust seeds exactly
-    const [pollPda] = anchor.web3.PublicKey.findProgramAddressSync(
-      [pollId.toArrayLike(Buffer, "le", 8)], // u64 as little-endian bytes
+  let pollPda: anchor.web3.PublicKey;
+
+  it("Initialize Poll", async () => {
+    const pollStart = new anchor.BN(Math.floor(Date.now() / 1000));
+    const pollEnd = pollStart.add(new anchor.BN(3600)); // +1 hour
+
+    // Derive Poll PDA
+    [pollPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [pollId.toArrayLike(Buffer, "le", 8)],
       program.programId
     );
 
-    console.log("Poll PDA:", pollPda.toString());
-    console.log("Program ID:", program.programId.toString());
+    const tx = await program.methods
+      .initializePoll(pollId, pollStart, pollEnd, description)
+      .accounts({
+        signer: signer.publicKey,
+        poll: pollPda,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
 
-    try {
-      const tx = await program.methods
-        .initializePoll(pollId, pollStart, pollEnd, description)
-        .accounts({
-          signer: signer.publicKey,
-          poll: pollPda,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-        .rpc();
+    console.log("Poll created:", tx);
 
-      console.log("Transaction Signature:", tx);
+    const pollAccount = await program.account.poll.fetch(pollPda);
+    assert.equal(pollAccount.description, description);
+  });
 
-      // Fetch and verify the poll account
-      const pollAccount = await program.account.poll.fetch(pollPda);
-      
-      console.log("Poll Account Data:", {
-        pollId: pollAccount.pollId.toString(),
-        description: pollAccount.description,
-        pollStart: pollAccount.pollStart.toString(),
-        pollEnd: pollAccount.pollEnd.toString(),
-        candidateAmount: pollAccount.candidateAmount.toString()
-      });
+  it("Initialize Candidate", async () => {
+    // Derive Candidate PDA
+    const [candidatePda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [
+        pollId.toArrayLike(Buffer, "le", 8),
+        Buffer.from(candidateName),
+      ],
+      program.programId
+    );
 
-      // Assertions
-      assert.equal(pollAccount.pollId.toString(), pollId.toString());
-      assert.equal(pollAccount.description, description);
-      assert.equal(pollAccount.pollStart.toString(), pollStart.toString());
-      assert.equal(pollAccount.pollEnd.toString(), pollEnd.toString());
-      assert.equal(pollAccount.candidateAmount.toString(), "0");
+    const tx = await program.methods
+      .initializeCandidate(candidateName, pollId)
+      .accounts({
+        signer: signer.publicKey,
+        poll: pollPda,
+        candidate: candidatePda,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
 
-      console.log("✅ Poll initialized successfully!");
+    console.log("Candidate created:", tx);
 
-    } catch (error) {
-      console.error("Error initializing poll:", error);
-      throw error;
-    }
+    const candidateAccount = await program.account.candidate.fetch(candidatePda);
+    assert.equal(candidateAccount.candidateName, candidateName);
+    assert.equal(candidateAccount.candidateVotes.toString(), "0");
   });
 });
