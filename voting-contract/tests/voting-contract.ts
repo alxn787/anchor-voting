@@ -19,7 +19,6 @@ describe("voting-contract", () => {
     const pollStart = new anchor.BN(Math.floor(Date.now() / 1000));
     const pollEnd = pollStart.add(new anchor.BN(3600)); // +1 hour
 
-    // Derive Poll PDA
     [pollPda] = anchor.web3.PublicKey.findProgramAddressSync(
       [pollId.toArrayLike(Buffer, "le", 8)],
       program.programId
@@ -37,11 +36,12 @@ describe("voting-contract", () => {
     console.log("Poll created:", tx);
 
     const pollAccount = await program.account.poll.fetch(pollPda);
+    console.log(pollAccount);
     assert.equal(pollAccount.description, description);
   });
 
   it("Initialize Candidate", async () => {
-    // Derive Candidate PDA
+
     const [candidatePda] = anchor.web3.PublicKey.findProgramAddressSync(
       [
         pollId.toArrayLike(Buffer, "le", 8),
@@ -63,6 +63,7 @@ describe("voting-contract", () => {
     console.log("Candidate created:", tx);
 
     const candidateAccount = await program.account.candidate.fetch(candidatePda);
+    console.log(candidateAccount);
     assert.equal(candidateAccount.candidateName, candidateName);
     assert.equal(candidateAccount.candidateVotes.toString(), "0");
   });
