@@ -11,7 +11,8 @@ describe("voting-contract", () => {
 
   const pollId = new anchor.BN(1);
   const description = "Who should be the next DAO leader?";
-  const candidateName = "Alice";
+  const candidateName = "Crunchy";
+  const candidateName1 = "Smooth";
 
   let pollPda: anchor.web3.PublicKey;
 
@@ -60,11 +61,63 @@ describe("voting-contract", () => {
       })
       .rpc();
 
-    console.log("Candidate created:", tx);
-
     const candidateAccount = await program.account.candidate.fetch(candidatePda);
     console.log(candidateAccount);
     assert.equal(candidateAccount.candidateName, candidateName);
     assert.equal(candidateAccount.candidateVotes.toString(), "0");
   });
+
+  it("Initialize Candidate", async () => {
+
+    const [candidatePda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [
+        pollId.toArrayLike(Buffer, "le", 8),
+        Buffer.from(candidateName1),
+      ],
+      program.programId
+    );
+
+    const tx = await program.methods
+      .initializeCandidate(candidateName1, pollId)
+      .accounts({
+        signer: signer.publicKey,
+        poll: pollPda,
+        candidate: candidatePda,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    const candidateAccount = await program.account.candidate.fetch(candidatePda);
+    console.log(candidateAccount);
+    assert.equal(candidateAccount.candidateName, candidateName1);
+    assert.equal(candidateAccount.candidateVotes.toString(), "0");
+  });
+
+  it("Vote for a Candidate", async () => {
+    const [candidatePda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [
+        pollId.toArrayLike(Buffer, "le", 8),
+        Buffer.from(candidateName),
+      ],
+      program.programId
+    );
+
+    const tx = await program.methods
+      .vote(candidateName, pollId)
+      .accounts({
+        signer: signer.publicKey,
+        poll: pollPda,
+        candidate: candidatePda,
+      })
+      .rpc();
+
+    console.log("Voted for candidate:", tx);
+
+    const candidateAccount = await program.account.candidate.fetch(candidatePda);
+    console.log(candidateAccount);
+    assert.equal(candidateAccount.candidateName, candidateName);
+    assert.equal(candidateAccount.candidateVotes.toString(), "1");
+  });
+
+
 });
